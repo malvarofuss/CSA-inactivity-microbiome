@@ -43,7 +43,9 @@ participants %>% # Calculate participant BMI
   mutate(bmi = weight_kg / ((height_cm / 100)^2))
 
 participants %>% # Calculate mean age across all participants
-  summarise(mean_age = mean(age))
+  summarise(
+    mean_age = mean(age),
+    sd_age = sd(age))
 
 frailty <- # Load frailty data
   read_tsv("data/frailty_data.tsv", col_types = c("nfci"))
@@ -266,14 +268,15 @@ adonis2( # Gut samples
   rownames_to_column(var = "rowname") %>%
   write_tsv("results/permanovas/oral_frailty_corrected_noout.tsv")
 
-# Alpha diversity analysis
+# Alpha diversity analysis ----
 
 # Load alpha diversity data
 alpha_diversity <- 
   c("observed_features", "shannon", "faith") %>% # Load all metrics 
-  map_dfr(~ read_tsv(
+  map_dfr(~ read_table(
     glue("data/16S/diversity/{.x}.tsv"),
-    skip = 1, col_types = "cd",
+    skip = 1, 
+    col_types = "cd",
     col_names = c("sample_id", "value")) %>%
   mutate(metric = .x)) %>%
   parse_sample_metadata() %>% 

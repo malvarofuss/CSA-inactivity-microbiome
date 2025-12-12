@@ -10,7 +10,7 @@ library(phyloseq)
 library(microbiome)
 library(patchwork)
 library(cowplot)
-library(ggh4x)
+instlibrary(ggh4x)
 
 # Initialize lists
 figures <- list()
@@ -288,8 +288,11 @@ figures$fig2$ab <-
       ggplot(mapping = aes(x = PC1, y = PC2)) + 
       xlab(NULL) + ylab(NULL) +
       labs(tag = "a.") + 
-      geom_point(aes(colour = cohort), size = 0.3, alpha = 0.8) +
+      geom_point(aes(colour = cohort), size = 0.1, alpha = 0.6) +
       stat_ellipse(aes(colour = cohort), alpha = 0.8) +
+      guides(
+        colour = guide_legend(override.aes = list(
+          shape = 16, size = 1.8, alpha = 1))) +
       annotate(
         "text", label = "R\u00B2 = 0.124\np <  0.001", 
         x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
@@ -297,11 +300,14 @@ figures$fig2$ab <-
     beta_diversity$pcoa_gut %>%
       ggplot(mapping = aes(x = PC1, y = PC2)) + 
       xlab(NULL) + ylab(NULL) +
-      geom_point(aes(colour = sex), size = 0.3, alpha = 0.8) + 
+      geom_point(aes(colour = sex), size = 0.1, alpha = 0.6) + 
       stat_ellipse(aes(colour = sex), alpha = 0.8) +
       scale_colour_manual(
         labels = c("Female", "Male"), 
         values = c("#b07aa1", "#59a14f")) + 
+      guides(
+        colour = guide_legend(override.aes = list(
+          shape = 16, size = 1.8, alpha = 1))) +
       annotate(
         "text", label = "R\u00B2 = 0.0957\np <  0.001", 
         x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
@@ -309,11 +315,14 @@ figures$fig2$ab <-
     beta_diversity$pcoa_gut %>%
       ggplot(mapping = aes(x = PC1, y = PC2)) + 
       xlab(NULL) + ylab(NULL) +
-      geom_point(aes(colour = exercise), size = 0.3, alpha = 0.8) +
+      geom_point(aes(colour = exercise), size = 0.1, alpha = 0.6) +
       stat_ellipse(aes(colour = exercise), alpha = 0.8) +
       scale_colour_manual(
         labels = c("Control", "Exercise"), 
         values = c("#f28e2b", "#4e79a7")) + 
+      guides(
+        colour = guide_legend(override.aes = list(
+          shape = 16, size = 1.8, alpha = 1))) +
       annotate(
         "text", label = "R\u00B2 = 0.0667\np <  0.001", 
         x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
@@ -322,8 +331,11 @@ figures$fig2$ab <-
       ggplot(mapping = aes(x = PC1, y = PC2)) + 
       xlab(NULL) + ylab(NULL) +
       labs(tag = "b.") + 
-      geom_point(aes(colour = cohort), size = 0.3, alpha = 0.8) + 
+      geom_point(aes(colour = cohort), size = 0.1, alpha = 0.6) + 
       stat_ellipse(aes(colour = cohort), alpha = 0.8) + 
+      guides(
+        colour = guide_legend(override.aes = list(
+          shape = 16, size = 1.8, alpha = 1))) +
       annotate(
         "text", label = "R\u00B2 = 0.155\np <  0.001", 
         x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
@@ -331,11 +343,14 @@ figures$fig2$ab <-
     beta_diversity$pcoa_oral %>%
       ggplot(mapping = aes(x = PC1, y = PC2)) + 
       xlab(NULL) + ylab(NULL) +
-      geom_point(aes(colour = sex), size = 0.3, alpha = 0.8) + 
+      geom_point(aes(colour = sex), size = 0.1, alpha = 0.6) + 
       stat_ellipse(aes(colour = sex), alpha = 0.8) +
       scale_colour_manual(
         labels = c("Female", "Male"), 
         values = c("#b07aa1", "#59a14f")) +
+      guides(
+        colour = guide_legend(override.aes = list(
+          shape = 16, size = 1.8, alpha = 1))) +
       annotate(
         "text", label = "R\u00B2 = 0.124\np <  0.001", 
         x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
@@ -343,11 +358,14 @@ figures$fig2$ab <-
     beta_diversity$pcoa_oral %>%
       ggplot(mapping = aes(x = PC1, y = PC2)) + 
       xlab(NULL) + ylab(NULL) +
-      geom_point(aes(colour = exercise), size = 0.3, alpha = 0.8) +
+      geom_point(aes(colour = exercise), size = 0.1, alpha = 0.6) +
       stat_ellipse(aes(colour = exercise), alpha = 0.8) +
       scale_colour_manual(
         labels = c("Control", "Exercise"), 
         values = c("#f28e2b", "#4e79a7")) +
+      guides(
+        colour = guide_legend(override.aes = list(
+          shape = 16, size = 1.8, alpha = 1))) +
       annotate(
         "text", label = "R\u00B2 = 0.0185\np =  0.005", 
         x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
@@ -494,7 +512,7 @@ figures$fig4$a <-
     add_phase_lines() +
   geom_line(
       aes(group = `participant_id`, colour = as.factor(exercise)),
-      linewidth = 0.4, alpha = 0.3) +
+      linewidth = 0.4, alpha = 0.3,  key_glyph = "blank") +
     geom_smooth(
       # data = raw_data %>% 
       #   dplyr::filter(phase != "baseline"),
@@ -505,13 +523,16 @@ figures$fig4$a <-
         x + I((x - 14) * ( x > 14)) + 
         I((x - 21) * (x > 21)) + 
         I((x - 23) * (x > 23))) +
-    scale_colour_manual(
-      values = c("#f28e2b", "#4e79a7"),
-      # breaks = c("C", "E"),
-      labels = c("Control", "Exercise")) +
-    guides(
-      colour = guide_legend(override.aes = list(
-        shape = 15, size = 3, linewidth = 0, alpha = 0.7))) +
+  geom_point( # Dummy geom for legend
+    aes(colour = as.factor(exercise)),
+    shape = 15, size = 4, alpha = 0) +
+  scale_colour_manual(
+    values = c("#f28e2b", "#4e79a7"),
+    # breaks = c("C", "E"),
+    labels = c("Control", "Exercise")) +
+  guides(
+    colour = guide_legend(override.aes = list(
+    shape = 15, size = 3, linewidth = 0, alpha = 1))) +
   annotate(
       "text", label = "p (control) =  0.028; p (exercise) = 0.86", 
       x = -Inf, y = Inf, hjust = -0.08, vjust = 2, size = 3, fontface = "bold") +
@@ -560,13 +581,16 @@ figures$fig4$b <-
         x + I((x - 14) * ( x > 14)) + 
         I((x - 21) * (x > 21)) + 
         I((x - 23) * (x > 23))) +
-    scale_colour_manual(
-      values = c("#f28e2b", "#4e79a7"),
-      # breaks = c("C", "E"),
-      labels = c("Control", "Exercise")) +
-    guides(
-      colour = guide_legend(override.aes = list(
-        shape = 15, size = 3, linewidth = 0, alpha = 0.7))) +
+  geom_point( # Dummy geom for legend
+    aes(colour = as.factor(exercise)),
+    shape = 15, size = 4, alpha = 0) +
+  scale_colour_manual(
+    values = c("#f28e2b", "#4e79a7"),
+    # breaks = c("C", "E"),
+    labels = c("Control", "Exercise")) +
+  guides(
+    colour = guide_legend(override.aes = list(
+      shape = 15, size = 3, linewidth = 0, alpha = 1))) +
    annotate(
       "text", label = "p (control) =  0.54; p (exercise) = 0.33", 
       x = -Inf, y = Inf, hjust = -0.08, vjust = 2, size = 3, fontface = "bold") +

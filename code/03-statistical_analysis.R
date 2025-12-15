@@ -1,5 +1,6 @@
 # Setup ----
 
+setwd("CSA")
 set.seed(0509)
 
 library(tidyverse)
@@ -317,11 +318,11 @@ alpha_diversity_analysis( # Run models for interaction effect with sex
 # Load feature count data
 feature_tables <- append(feature_tables, list(
   gut = # Gut genus count feature table
-    read_tsv("data/16S/collapse/table_genus_gut.tsv", skip = 1),
+    read_tsv("data/16S/collapse/table_gut_genus.tsv", skip = 1),
   oral = # Oral genus count feature table
-    read_tsv("data/16S/collapse/table_genus_oral.tsv", skip = 1),
+    read_tsv("data/16S/collapse/table_oral_genus.tsv", skip = 1),
   pathway = read_tsv( # Pathway count feature table
-    "data/MGS/humann3/unstratify/pathabundance_unstratified.tsv") %>%
+    "data/MGS/humann3/pathabundance_unstratified.tsv") %>%
     rename_with(~ str_remove(.x, "_Abundance-RPKs")) %>% 
     rename_with(~ str_remove(.x, "_Abundance")) %>%
     rename_with(~ str_replace(.x, "HDT([1-9])$", "HDT0\\1")), 

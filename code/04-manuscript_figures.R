@@ -1,16 +1,18 @@
 # Setup ----
 
+setwd("CSA")
+set.seed(0509)
+
 # Load packages
 library(tidyverse)
 library(scales)
-library(knitr)
 library(ggpubr)
 library(ggrepel)
 library(phyloseq)
 library(microbiome)
 library(patchwork)
 library(cowplot)
-instlibrary(ggh4x)
+library(ggh4x)
 
 # Initialize lists
 figures <- list()
@@ -119,8 +121,8 @@ figures$figS1 <- # Plot summary of 16S gut samples
   plot_sample_summary()
 
 ggsave(
-  "results/figures/FigS1.png", figures$figS1,
-  width = 6.5, height = 7)
+  "results/figures/FigS1.pdf", figures$figS1,
+  width = 6.5, height = 7, dpi = 600)
 
 # Figure S2
 figures$figS2 <- # Plot summary of 16S gut samples
@@ -128,8 +130,8 @@ figures$figS2 <- # Plot summary of 16S gut samples
   plot_sample_summary()
 
 ggsave(
-  "results/figures/FigS2.png", figures$figS1,
-  width = 6.5, height = 7)
+  "results/figures/FigS2.pdf", figures$figS1,
+  width = 6.5, height = 7, dpi = 600)
 
 # Figure S3
 figures$figS3 <- # Plot summary of fecal metagenomic samples
@@ -151,8 +153,8 @@ figures$figS3 <- # Plot summary of fecal metagenomic samples
     size = 2)
 
 ggsave(
-  "results/figures/FigS3.png", figures$figS3,
-  width = 6.5, height = 4)
+  "results/figures/FigS3.pdf", figures$figS3,
+  width = 6.5, height = 4, dpi = 600)
 
 
 # Figure 1 ----
@@ -217,7 +219,7 @@ figures$fig1$b <-
         skip = 7, col_names = c("sample_id", "PC1", "PC2")) %>%
       filter(str_detect(sample_id, "PT")) %>%
       mutate(`PC2` = str_remove(`PC2`, "\t.*") %>% as.numeric()) %>%
-      left_join(samples),
+      parse_sample_metadata(),
     mapping = aes(x = PC1, y = PC2)) +
   xlab("PC1 (68.1%)") + ylab("PC2 (27.0%)") +
   geom_point(aes(colour = participant_id), size = 0.6) + 
@@ -244,7 +246,7 @@ figures$fig1$c <-
         skip = 7, col_names = c("sample_id", "PC1", "PC2")) %>%
       filter(str_detect(sample_id, "PT")) %>%
       mutate(`PC2` = str_remove(`PC2`, "\t.*") %>% as.numeric()) %>%
-      left_join(samples),
+      parse_sample_metadata(),
     mapping = aes(x = PC1, y = PC2)) +
   
   xlab("PC1 (54.3%)") + ylab("PC2 (33.8%)") +
@@ -277,7 +279,7 @@ figures$fig1$final <-
     plot.tag = element_text(margin = margin(b = -5)))  
 
 ggsave( 
-  filename = "results/figures/Fig1.png", plot = figures$fig1$final, 
+  filename = "results/figures/Fig1.pdf", plot = figures$fig1$final, 
   width = 6.8, height = 7.5, units = "in", dpi = 600) 
 
 # Figure 2 ----
@@ -383,7 +385,7 @@ figures$fig2$final <-
     axis.text = element_blank())
 
 ggsave(
-  filename = "results/figures/Fig2.png", 
+  filename = "results/figures/Fig2.pdf", 
   plot = figures$fig2$final,
   width = 5.2, height = 3, units = "in", dpi = 600) 
 
@@ -482,7 +484,7 @@ figures$fig3$final <-
 
 # Save figure
 ggsave( 
-  filename = "results/figures/Fig3.png", plot = figures$fig3$final, 
+  filename = "results/figures/Fig3.pdf", plot = figures$fig3$final, 
   width = 6, height = 2.35, units = "in", dpi = 600) 
 
 
@@ -491,7 +493,6 @@ ggsave(
 figures$fig4$a <- 
   
   alpha_diversity %>% 
-    # filter(sample_id)
     parse_sample_metadata() %>%
   mutate(
     sample_type = case_when(
@@ -499,23 +500,18 @@ figures$fig4$a <-
         str_detect(sample_id, "O") ~  "oral")) %>%
   dplyr::filter(metric == "faith", sample_type == "gut") %>%
     dplyr::filter(phase %in% c("bedrest", "recovery")) %>%
-  
-    # filter(metric == "faith", phase %in% c("bedrest", "recovery")) %>%
     assign_unique_time() %>%
   
   left_join(participants) %>%
   
   ggplot(aes(x = timepoint, y = value)) + 
-  # facet_grid(. ~ sample_type) + 
-    xlab(NULL) + ylab("Phylogenetic diversity") +
+  xlab(NULL) + ylab("Phylogenetic diversity") +
   labs(tag = "a.") +
     add_phase_lines() +
   geom_line(
       aes(group = `participant_id`, colour = as.factor(exercise)),
-      linewidth = 0.4, alpha = 0.3,  key_glyph = "blank") +
+      linewidth = 0.4, alpha = 0.3) +
     geom_smooth(
-      # data = raw_data %>% 
-      #   dplyr::filter(phase != "baseline"),
       aes(colour = as.factor(exercise)),
       method = "lm", se = FALSE, linewidth = 1,
       formula = 
@@ -528,106 +524,80 @@ figures$fig4$a <-
     shape = 15, size = 4, alpha = 0) +
   scale_colour_manual(
     values = c("#f28e2b", "#4e79a7"),
-    # breaks = c("C", "E"),
     labels = c("Control", "Exercise")) +
   guides(
     colour = guide_legend(override.aes = list(
     shape = 15, size = 3, linewidth = 0, alpha = 1))) +
   annotate(
       "text", label = "p (control) =  0.028; p (exercise) = 0.86", 
-      x = -Inf, y = Inf, hjust = -0.08, vjust = 2, size = 3, fontface = "bold") +
-  theme_bw() + 
-    theme(
-      legend.position = "bottom",
-      legend.title = element_blank(),
-      legend.text = element_text(size = 12),
-      strip.background = element_rect(fill = "gray95"),
-      strip.text.x = element_text(size = 12),
-      strip.text.y = element_text(size = 10),
-      axis.text.x = element_text(size = 8))
+      x = -Inf, y = Inf, hjust = -0.08, vjust = 2, 
+      size = 3, fontface = "bold")
 
 figures$fig4$b <- 
   
   alpha_diversity %>% 
-    # filter(sample_id)
-    parse_sample_metadata() %>%
+  parse_sample_metadata() %>%
   mutate(
     sample_type = case_when(
         str_detect(sample_id, "G") ~  "gut",
         str_detect(sample_id, "O") ~  "oral")) %>%
-  dplyr::filter(metric == "faith", sample_type == "oral") %>%
-    dplyr::filter(phase %in% c("bedrest", "recovery")) %>%
-  
-    # filter(metric == "faith", phase %in% c("bedrest", "recovery")) %>%
-    assign_unique_time() %>%
-  
+  filter(metric == "faith", sample_type == "oral") %>%
+  filter(phase %in% c("bedrest", "recovery")) %>%
+  assign_unique_time() %>%
   left_join(participants) %>%
   
   ggplot(aes(x = timepoint, y = value)) + 
-  # facet_grid(. ~ sample_type) + 
-    xlab(NULL) + ylab("Phylogenetic diversity") +
+  xlab(NULL) + ylab("Phylogenetic diversity") +
   labs(tag = "b.") +
     add_phase_lines() +
   geom_line(
       aes(group = `participant_id`, colour = as.factor(exercise)),
       linewidth = 0.4, alpha = 0.3) +
-    geom_smooth(
-      # data = raw_data %>% 
-      #   dplyr::filter(phase != "baseline"),
-      aes(colour = as.factor(exercise)),
-      method = "lm", se = FALSE, linewidth = 1,
-      formula = 
-        y ~ 
-        x + I((x - 14) * ( x > 14)) + 
-        I((x - 21) * (x > 21)) + 
-        I((x - 23) * (x > 23))) +
+  geom_smooth(
+    aes(colour = as.factor(exercise)),
+    method = "lm", se = FALSE, linewidth = 1,
+    formula = 
+      y ~ 
+      x + I((x - 14) * ( x > 14)) + 
+      I((x - 21) * (x > 21)) + 
+      I((x - 23) * (x > 23))) +
   geom_point( # Dummy geom for legend
     aes(colour = as.factor(exercise)),
     shape = 15, size = 4, alpha = 0) +
   scale_colour_manual(
     values = c("#f28e2b", "#4e79a7"),
-    # breaks = c("C", "E"),
     labels = c("Control", "Exercise")) +
   guides(
     colour = guide_legend(override.aes = list(
       shape = 15, size = 3, linewidth = 0, alpha = 1))) +
    annotate(
       "text", label = "p (control) =  0.54; p (exercise) = 0.33", 
-      x = -Inf, y = Inf, hjust = -0.08, vjust = 2, size = 3, fontface = "bold") +
-  theme_bw() + 
-    theme(
-      legend.position = "bottom",
-      legend.title = element_blank(),
-      legend.text = element_text(size = 12),
-      strip.background = element_rect(fill = "gray95"),
-      strip.text.x = element_text(size = 12),
-      strip.text.y = element_text(size = 10),
-      axis.text.x = element_text(size = 8))
+      x = -Inf, y = Inf, hjust = -0.08, vjust = 2, size = 3, fontface = "bold")
 
 figures$fig4$final <-
   
   # Define plot layout
-  figures$fig4$a + figures$fig4$b &
-  plot_layout(guides = "collect") +
+  figures$fig4$a + figures$fig4$b +
+  plot_layout(guides = "collect") &
   
-  # Format legend
-  
-  # Format axes
-
   # Set figure theme
   theme_bw() &
   theme(
+    legend.position = "bottom",
+    legend.title = element_blank(),
+    legend.text = element_text(size = 12),
+    strip.background = element_rect(fill = "gray95"),
+    strip.text.x = element_text(size = 12),
+    strip.text.y = element_text(size = 10),
+    axis.text.x = element_text(size = 8),
     axis.title = element_text(size = 11),
     axis.text = element_text(size = 11),
-    legend.position = "bottom",
-    # legend.title = element_text("FI-36", size = 12),
     legend.justification = "center",
-    plot.tag = element_text(size = 14)
-  )
+    plot.tag = element_text(size = 14))
 
 # Save figure
 ggsave( 
-  filename = "results/figures/Fig4.png", plot = figures$fig4$final, 
+  filename = "results/figures/Fig4.pdf", plot = figures$fig4$final, 
   width = 6.8, height = 3, units = "in", dpi = 600) 
 
 
@@ -639,7 +609,7 @@ plot_da_estimates <- function(da_results, p_col) { # Left hand side of plot
   ggplot(
     data =
       read_tsv({{ da_results }}) %>%
-      left_join(read_csv("~/CAIS-microbiome/data/da_results_recoding.csv")) %>%
+      left_join(read_csv("data/da_results_recoding.csv")) %>%
       group_by(exercise) %>%
       arrange(Estimate) %>%
       mutate(
@@ -716,7 +686,7 @@ plot_feature_trajectories <- function( # Right hand side of plot
               names_to = "sample_id", 
               values_to = "abundance")) %>%
       parse_sample_metadata() %>%
-      dplyr::filter(phase %in% c("bedrest", "recovery")) %>%
+      filter(phase %in% c("bedrest", "recovery")) %>%
       assign_unique_time(),
     
     mapping = aes(x = timepoint, y = as.numeric(abundance))) +
@@ -763,7 +733,7 @@ plot_feature_trajectories <- function( # Right hand side of plot
 }
 
 ggsave( 
-  filename = "results/figures/Fig5.png",
+  filename = "results/figures/Fig5.pdf",
   plot = 
     (plot_da_estimates(
       "results/differential_abundance/genus_gut.tsv", "p_BH") + # 16S gut samples
@@ -796,7 +766,7 @@ ggsave(
     units = "in", dpi = 600) 
 
 ggsave( 
-  filename = "results/figures/FigS4.png",
+  filename = "results/figures/FigS4.pdf",
   plot = 
     plot_da_estimates(
       "results/differential_abundance/pathway_gut.tsv", "Pr(>|t|)") + # 16S gut samples
@@ -816,7 +786,7 @@ ggsave(
   dpi = 600) 
 
 ggsave( 
-  filename = "results/figures/FigS5.png",
+  filename = "results/figures/FigS5.pdf",
   plot = 
     plot_da_estimates("results/differential_abundance/metabolite_gut.tsv", "Pr(>|t|)") + # 16S gut samples
            plot_feature_trajectories(

@@ -146,48 +146,6 @@ for type in "gut" "oral" `# Generate .qzv`
     --o-visualization ~/CAIS-microbiome/results/qzv_files/repseqs_${type}.qzv 
   done
 
-
-# Collapse and export tables to genus and family level ----
-
-mkdir collapse
-
-for type in "gut" "oral"
-  qiime taxa collapse \
-    --i-table tables/table_${type}.qza  \
-    --i-taxonomy taxonomy/classification.qza \
-    --p-level 6 \
-    --o-collapsed-table collapse/table_${type}_genus.qza
-    done
-  done
-
-for type in "gut" "oral" `# Export .qza to .tsv`
-  do 
-    qiime tools export \
-      --input-path collapse/table_${type}_genus.qza \
-      --output-path . \
-    biom convert 
-      -i feature-table.biom \
-      -o collapse/table_${type}_genus.tsv \
-      --to-tsv 
-    rm feature-table.biom
-  done
-
-qiime taxa collapse `# Collapse combined gut-oral table to family level` \
-  --i-table tables/table_bleed_decon.qza  \
-  --i-taxonomy taxonomy/classification.qza \
-  --p-level 5 \
-  --o-collapsed-table collapse/table_family.qza
-
-qiime tools export `# Export family feature table` \
-  --input-path collapse/table_family.qza \
-  --output-path collapse
-biom convert \
-  -i collapse/feature-table.biom \
-  -o collapse/table_family.tsv \
-  --to-tsv 
-rm feature-table.biom
-
-
 # Generate phylogeny ----
 
 qiime fragment-insertion sepp `# All samples` \
@@ -206,106 +164,103 @@ for type in "gut" "oral" `# Gut and oral samples`
     --p-threads 30
   done 
 
-# Repeated rarefaction ----
+# Collapse to genus and family level ----
 
-mkdir rarefaction
+mkdir collapse
 
-for ((i=1; i<=100; i++))
-  do qiime feature-table rarefy 
-    --i-table tables/table_bleed_decon.qza \
-    --p-sampling-depth 2500 `# Rarefy to 2,500 reads` \
-    --o-rarefied-table rarefaction/table_${i}.qza
-  done
+for type in "gut" "oral"; do `# Collapse split tables to genus level`
+  qiime taxa collapse \
+    --i-table tables/table_${type}.qza  \
+    --i-taxonomy taxonomy/classification.qza \
+    --p-level 6 \
+    --o-collapsed-table collapse/table_${type}_genus.qza; done
 
+qiime taxa collapse \ `# Collapse combined table to family level`
+  --i-table tables/table_${type}.qza  \
+  --i-taxonomy taxonomy/classification.qza \
+  --p-level 5 \
+  --o-collapsed-table collapse/table_${type}_family.qza
 
-# Calculate and export alpha diversity ----
+# Calculate diversity ----
 
 mkdir diversity
-mkdir diversity/alpha_vectors
+mkdir diversity/qzas
 
-for metric in "observed_features" "shannon" `# Non-phylogenetic metrics`
-  do 
-    for ((i=1; i<=100; i++)) # Calculate diversity for all subsampled tables
-      do 
-        qiime diversity alpha \
-          --i-table rarefaction/table_${i}.qza \
-          --p-metric ${metric} \
-          --o-alpha-diversity diversity/alpha_vectors/${metric}_${i}.qza 
-        # Export diversity for each subsampled table
-        qiime tools export \ 
-          --input-path diversity/alpha_vectors/${metric}_${i}.qza \
-          --output-path diversity 
-        # Copy sample diversity to temporary diversity table
-        cat diversity/alpha-diversity.tsv >> diversity/${metric}_temp.tsv 
-        # Calculate average diversity for new subsample with previous average
-        awk '{
-          sum[$1] += $2;
-          count[$1]++;
-        }
-        END {
-          for (sample_id in sum) {
-            print sample_id, sum[sample_id] / count[sample_id];
-          }
-        }' diversity/${metric}_temp.tsv \
-        | sort > diversity/${metric}.tsv
-    done
-  done
-  
-for ((i=1; i<=100; i++)) `# Calculate diversity for all subsampled tables`
-  do 
-    qiime diversity alpha-phylogenetic `# Non-phylogenetic metrics` \
-      --i-table rarefaction/table_${i}.qza \
+for type in "gut" "oral"; do
+  qiime gemelli phylogenetic-rpca-with-taxonomy `# Calculate phyloegentic RPCA` \
+    --i-table tables/table_${type}.qza \
+    --i-phylogeny phylogeny/tree_${type}.qza  \
+    --m-taxonomy-file taxonomy/classification.qza \
+    --o-biplot diversity/beta_analysis/rpca_pcoa_${type}.qza \
+    --o-distance-matrix diversity/beta_analysis/rpca_dm_${type}.qza \
+    --o-counts-by-node-tree diversity/beta_analysis/rpca_phylo-tree_${type}.qza \
+    --o-counts-by-node diversity/beta_analysis/rpca_phylo-table_${type}.qza \
+    --o-t2t-taxonomy diversity/beta_analysis/rpca_phylo-taxonomy_${type}.qza; done
+
+rm diversity/beta_analysis/rpca_phylo-tree_*.qza `# Remove unused results`
+rm diversity/beta_analysis/rpca_phylo-table_*.qza
+rm diversity/beta_analysis/rpca_phylo-taxonomy_*.qza
+
+conda deactivate
+conda activate q2-boots-amplicon-2025.7 `# Load q2-boots to perform rarefaction`
+
+# # Calculate alpha diversity with rarefaction
+for metric in "observed_features" "shannon" "faith_pd"; do 
+  qiime boots alpha \
+    --i-table tables/table_bleed_decon.qza \
+    --i-phylogeny phylogeny/tree_all.qza \
+    --p-sampling-depth 2500 \
+    --p-metric ${metric} \
+    --p-n 100 \
+    --p-no-replacement \
+    --p-average-method median \
+    --o-average-alpha-diversity diversity/qzas/${metric}.qza; done
+
+# Calculate Bray Curtis and Unifrac with rarefaction
+for type in "gut" "oral"; do 
+  for metric in "braycurtis" "weighted_unifrac"; do
+    qiime boots beta \
+      --i-table tables/table_${type}.qza \
       --i-phylogeny phylogeny/tree_${type}.qza \
-      --p-metric 'faith_pd' \
-      --o-alpha-diversity diversity/alpha_vectors/faith_${i}.qza 
-    # Export diversity for each subsampled table
-    qiime tools export \
-      --input-path diversity/alpha_vectors/${metric}_${i}.qza \
-      --output-path diversity 
-    # Copy sample diversity to temporary diversity table
-    cat diversity/alpha-diversity.tsv >> diversity/${metric}_temp.tsv 
-    # Calculate average diversity for new subsample with previous average
-    awk '{
-      sum[$1] += $2;
-      count[$1]++;
-    }
-    END {
-      for (sample_id in sum) {
-        print sample_id, sum[sample_id] / count[sample_id];
-      }
-    }' diversity/${metric}_temp.tsv \
-    | sort > diversity/${metric}.tsv
-  done
+      --p-metric ${metric} \
+      --p-sampling-depth 2500 \
+      --p-n 100 \
+      --p-no-replacement \
+      --p-average-method medoid \
+      --o-average-distance-matrix diversity/qzas/${metric}_dm_${type}.qza; done; done
 
-# Calculate and export beta-diversity ----
+for type in "gut" "oral"; do `# Apply principal coordinates analysis`
+  for metric in "braycurtis" "weighted_unifrac"; do
+    qiime diversity pcoa \
+      --i-distance-matrix diversity/beta_analysis/${metric}_dm_${type}.qza \
+      --o-pcoa diversity/beta_analysis/${metric}_pcoa_${type}.qza; done; done
 
-mkdir gemelli 
+# Export .qza files for statistical analysis ----
 
-for type in "gut" "oral"
-  do
-    qiime gemelli phylogenetic-rpca-with-taxonomy `# Calculate phyloegentic RPCA` \
-      --i-table tables/table_bleed_decon.qza \
-      --i-phylogeny phylogeny/tree_${type}.qza  \
-      --m-taxonomy-file taxonomy/classification.qza \
-      --o-biplot diversity/gemelli/biplot_${type}.qza \
-      --o-distance-matrix diversity/gemelli/dm_${type}.qza \
-      --o-counts-by-node-tree diversity/gemelli//phylo-tree_${type}.qza \
-      --o-counts-by-node diversity/gemelli//phylo-table_${type}.qza \
-      --o-t2t-taxonomy diversity/gemelli//phylo-taxonomy_${type}.qza \
-  done
+for infile in collapse/*; do `# Export feature tables`
+  base="$(basename "$infile" .qza)"
+  qiime tools export \
+      --input-path ${infile} \
+      --output-path . 
+  biom convert \
+      -i feature-table.biom \
+      -o collapse/${base}.tsv \
+      --to-tsv 
+  rm feature-table.biom; done
 
-for type in "gut" "oral" # Export distance matrices
-  do 
-    qiime tools export \
-      --input-path diversity/gemelli/dm_${type}.qza \
-      --output-path diversity 
-    mv diversity/distance-matrix.tsv diversity/dm_${type}.txt
-  done
-  
-for type in "gut" "oral" # Export ordination plots
-  do 
-    qiime tools export \
-      --input-path diversity/gemelli/biplot_${type}.qza \
-      --output-path diversity 
-    mv diversity/ordination.txt diversity/ordination_${type}.txt
-  done
+for infile in diversity/qza/; do `# Export alpha diversity`
+  base="$(basename "$infile" .qza)"
+  qiime tools export \
+    --input-path ${infile} \
+    --output-path diversity
+  mv diversity/alpha-diversity.tsv diversity/${base}.tsv
+  rm diversity/alpha-diversity.tsv; done
+
+for infile in diversity/qzas/*; do `# Export diversity results`
+  base="$(basename "$infile" .qza)"
+  qiime tools export \
+    --input-path ${infile} \
+    --output-path diversity
+  mv diversity/alpha-diversity.tsv diversity/${base}.tsv
+  mv diversity/distance-matrix.tsv diversity/${base}.tsv
+  mv diversity/ordination.txt diversity/${base}.txt; done

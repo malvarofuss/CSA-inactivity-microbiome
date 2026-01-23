@@ -1,6 +1,6 @@
 # Setup ----
 
-setwd("CSA")
+setwd(".")
 set.seed(0509)
 
 # Load packages
@@ -112,7 +112,8 @@ plot_sample_summary <- function(data) {
       axis.text.x = element_text(angle = 45, hjust = -0.1),
       legend.position = "bottom",
       legend.key.width = unit(1.8, "cm"),
-      legend.key.height = unit(0.3, "cm"))
+      legend.key.height = unit(0.3, "cm"),
+      plot.margin = margin(0, 0, 0, 0))
 }
 
 # Figure S1
@@ -211,11 +212,25 @@ figures$fig1$a <-
       strip.clip = "on",
       axis.text.x = element_blank())
 
+beta_diversity$pcoa <- list(
+  pcoa_gut = read_tsv(
+    "data/16S/diversity/rpca_pcoa_gut.txt", 
+    skip = 7, col_names = c("sample_id", "PC1", "PC2")) %>%
+    filter(str_detect(sample_id, "PT")) %>%
+    mutate(`PC2` = str_remove(`PC2`, "\t.*") %>% as.numeric()) %>%
+    parse_sample_metadata(),
+  pcoa_oral = read_tsv(
+    "data/16S/diversity/rpca_pcoa_oral.txt", 
+    skip = 7, col_names = c("sample_id", "PC1", "PC2")) %>%
+    filter(str_detect(sample_id, "PT")) %>%
+    mutate(`PC2` = str_remove(`PC2`, "\t.*") %>% as.numeric()) %>%
+    parse_sample_metadata())
+
 figures$fig1$b <- 
   ggplot(
     data = 
       read_tsv(
-        "data/16S/diversity/ordination_gut.txt", 
+        "data/16S/diversity/rpca_pcoa_gut.txt", 
         skip = 7, col_names = c("sample_id", "PC1", "PC2")) %>%
       filter(str_detect(sample_id, "PT")) %>%
       mutate(`PC2` = str_remove(`PC2`, "\t.*") %>% as.numeric()) %>%
@@ -242,7 +257,7 @@ figures$fig1$c <-
   ggplot(
     data = 
       read_tsv(
-        "data/16S/diversity/ordination_oral.txt", 
+        "data/16S/diversity/rpca_pcoa_oral.txt", 
         skip = 7, col_names = c("sample_id", "PC1", "PC2")) %>%
       filter(str_detect(sample_id, "PT")) %>%
       mutate(`PC2` = str_remove(`PC2`, "\t.*") %>% as.numeric()) %>%
@@ -274,8 +289,7 @@ figures$fig1$final <-
   theme(
     text = element_text(family = "Arial"),
     plot.margin = margin(0, 0, 0, 0),
-    plot.tag.position = c(0, 1),  
-    # plot.tag.location = "panel",
+    plot.tag.position = c(0, 1),
     plot.tag = element_text(margin = margin(b = -5)))  
 
 ggsave( 
@@ -286,12 +300,16 @@ ggsave(
 
 figures$fig2$ab <- 
   list(
-    beta_diversity$pcoa_gut %>%
+    beta_diversity$pcoa$pcoa_gut %>% left_join(participants) %>%
       ggplot(mapping = aes(x = PC1, y = PC2)) + 
       xlab(NULL) + ylab(NULL) +
       labs(tag = "a.") + 
       geom_point(aes(colour = cohort), size = 0.1, alpha = 0.6) +
       stat_ellipse(aes(colour = cohort), alpha = 0.8) +
+      scale_colour_manual(
+        values = c("#F8766D", "#00BFC4", "#7CAE00", "#C77CFF"),
+        labels = c("Cohort 1 (n=5)", "Cohort 2 (n=5)",
+                   "Cohort 3 (n=6)", "Cohort 4 (n=6)")) +
       guides(
         colour = guide_legend(override.aes = list(
           shape = 16, size = 1.8, alpha = 1))) +
@@ -299,13 +317,13 @@ figures$fig2$ab <-
         "text", label = "R\u00B2 = 0.124\np <  0.001", 
         x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
         size = 2.8, fontface = "bold"),
-    beta_diversity$pcoa_gut %>%
+    beta_diversity$pcoa$pcoa_gut %>% left_join(participants) %>%
       ggplot(mapping = aes(x = PC1, y = PC2)) + 
       xlab(NULL) + ylab(NULL) +
       geom_point(aes(colour = sex), size = 0.1, alpha = 0.6) + 
       stat_ellipse(aes(colour = sex), alpha = 0.8) +
       scale_colour_manual(
-        labels = c("Female", "Male"), 
+        labels = c("Female (n=11)", "Male (n=11)"), 
         values = c("#b07aa1", "#59a14f")) + 
       guides(
         colour = guide_legend(override.aes = list(
@@ -314,13 +332,13 @@ figures$fig2$ab <-
         "text", label = "R\u00B2 = 0.0957\np <  0.001", 
         x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
         size = 2.8, fontface = "bold"),
-    beta_diversity$pcoa_gut %>%
+    beta_diversity$pcoa$pcoa_gut %>% left_join(participants) %>%
       ggplot(mapping = aes(x = PC1, y = PC2)) + 
       xlab(NULL) + ylab(NULL) +
       geom_point(aes(colour = exercise), size = 0.1, alpha = 0.6) +
       stat_ellipse(aes(colour = exercise), alpha = 0.8) +
       scale_colour_manual(
-        labels = c("Control", "Exercise"), 
+        labels = c("Control (n=11)", "Exercise (n=11)"), 
         values = c("#f28e2b", "#4e79a7")) + 
       guides(
         colour = guide_legend(override.aes = list(
@@ -329,12 +347,16 @@ figures$fig2$ab <-
         "text", label = "R\u00B2 = 0.0667\np <  0.001", 
         x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
         size = 2.8, fontface = "bold"),
-    beta_diversity$pcoa_oral %>%
+    beta_diversity$pcoa$pcoa_gut %>% left_join(participants) %>%
       ggplot(mapping = aes(x = PC1, y = PC2)) + 
       xlab(NULL) + ylab(NULL) +
       labs(tag = "b.") + 
       geom_point(aes(colour = cohort), size = 0.1, alpha = 0.6) + 
       stat_ellipse(aes(colour = cohort), alpha = 0.8) + 
+      scale_colour_manual(
+        values = c("#F8766D", "#00BFC4", "#7CAE00", "#C77CFF"),
+        labels = c("Cohort 1 (n=5)", "Cohort 2 (n=5)",
+                   "Cohort 3 (n=6)", "Cohort 4 (n=6)")) +
       guides(
         colour = guide_legend(override.aes = list(
           shape = 16, size = 1.8, alpha = 1))) +
@@ -342,13 +364,13 @@ figures$fig2$ab <-
         "text", label = "R\u00B2 = 0.155\np <  0.001", 
         x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
         size = 2.8, fontface = "bold"),
-    beta_diversity$pcoa_oral %>%
+    beta_diversity$pcoa$pcoa_oral %>% left_join(participants) %>%
       ggplot(mapping = aes(x = PC1, y = PC2)) + 
       xlab(NULL) + ylab(NULL) +
       geom_point(aes(colour = sex), size = 0.1, alpha = 0.6) + 
       stat_ellipse(aes(colour = sex), alpha = 0.8) +
       scale_colour_manual(
-        labels = c("Female", "Male"), 
+        labels = c("Female (n=11)", "Male (n=11)"), 
         values = c("#b07aa1", "#59a14f")) +
       guides(
         colour = guide_legend(override.aes = list(
@@ -357,19 +379,19 @@ figures$fig2$ab <-
         "text", label = "R\u00B2 = 0.124\np <  0.001", 
         x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
         size = 2.8, fontface = "bold"),
-    beta_diversity$pcoa_oral %>%
+    beta_diversity$pcoa$pcoa_oral %>% left_join(participants) %>%
       ggplot(mapping = aes(x = PC1, y = PC2)) + 
       xlab(NULL) + ylab(NULL) +
       geom_point(aes(colour = exercise), size = 0.1, alpha = 0.6) +
       stat_ellipse(aes(colour = exercise), alpha = 0.8) +
       scale_colour_manual(
-        labels = c("Control", "Exercise"), 
+        labels = c("Control (n=11)", "Exercise (n=11)"), 
         values = c("#f28e2b", "#4e79a7")) +
       guides(
         colour = guide_legend(override.aes = list(
           shape = 16, size = 1.8, alpha = 1))) +
       annotate(
-        "text", label = "R\u00B2 = 0.0185\np =  0.005", 
+        "text", label = "R\u00B2 = 0.0185\np <  0.001", 
         x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
         size = 2.8, fontface = "bold"))
 
@@ -382,7 +404,8 @@ figures$fig2$final <-
     legend.position = "right",
     legend.title = element_blank(),
     axis.ticks = element_blank(),
-    axis.text = element_blank())
+    axis.text = element_blank()) &
+  plot_annotation(theme = theme(plot.margin = margin(0, 0, 0, 0)))
 
 ggsave(
   filename = "results/figures/Fig2.pdf", 
@@ -420,40 +443,39 @@ figures$fig3$a <-
     # PERMANOVA results
     annotate(
       "text", label = "R\u00B2 = 0.000228\np =  0.588", 
-      x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, size = 3.2, fontface = "bold")
+      x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
+      size = 3.2, fontface = "bold")
 
 figures$fig3$b <- 
   
-  beta_diversity$pcoa_oral %>%
-    inner_join(frailty) %>%
-    mutate(
-      exercise = case_when(
-        exercise == 0 ~ "C", exercise == 1 ~ "E"),
-      sex = case_when(
-        sex == 0 ~ "F", sex == 1 ~ "M"),
-      subject_id = str_remove(participant_id, "PT")) %>%
+  # Figure data
+  beta_diversity$pcoa_oral %>% # Load PCoA results
   
+  inner_join(frailty) %>% # Select FI-36
+  mutate( # Format data
+    exercise = case_when(
+      exercise == 0 ~ "C", exercise == 1 ~ "E"),
+    sex = case_when(
+      sex == 0 ~ "F", sex == 1 ~ "M"),
+    subject_id = str_remove(participant_id, "PT")) %>%
+  
+  # Generate plot
   ggplot(mapping = aes(x = PC1, y = PC2)) + 
-    xlab("PC1 (54.3%)") + ylab("PC2 (33.8%)") +
-    labs(tag = "b.", colour = "FI-36") +
-    
-    # Normal points (FI36 < 0.45)
-    geom_point(
-      data = . %>% filter(fi36 <= 0.45),
-      aes(colour = fi36), size = 1) + 
-  
-    # Outliers (FI36 > 0.6)
+  xlab("PC1 (54.3%)") + ylab("PC2 (33.8%)") +
+  labs(tag = "b.", colour = "FI-36") +
+  # Normal points (FI36 < 0.45)
+  geom_point(
+    data = . %>% filter(fi36 <= 0.45),
+    aes(colour = fi36), size = 1) + 
+  # Outliers (FI36 > 0.6)
   geom_point(
     data = . %>% filter(fi36 > 0.6),
     color = "firebrick4", size = 2) +
-    
-    annotate(
-      "text", label = "R\u00B2 = 0.00329\np = 0.086", 
-      x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, size = 3.2, fontface = "bold") +
-    
-    theme_bw() + 
-    theme(
-    )
+  # PERMANOVA results
+  annotate(
+    "text", label = "R\u00B2 = 0.00329\np =  0.086", 
+    x = -Inf, y = Inf, hjust = -0.1, vjust = 1.3, 
+    size = 3.2, fontface = "bold")
 
 figures$fig3$final <-
   
@@ -474,13 +496,13 @@ figures$fig3$final <-
     axis.title = element_text(size = 10),
     axis.text = element_text(size = 8),
     legend.position = "right",
-    legend.title = element_text("FI-36", size = 11),
+    legend.title = element_text(size = 11),
     legend.justification = "center",
     legend.key.width = unit(0.5, "cm"),
     legend.key.height = unit(0.65, "cm"),
     plot.tag = element_text(size = 14),
-    aspect.ratio = 1
-  )
+    plot.margin = margin(0, 0, 0, 0, "cm"),
+    aspect.ratio = 1)
 
 # Save figure
 ggsave( 
@@ -498,7 +520,7 @@ figures$fig4$a <-
     sample_type = case_when(
         str_detect(sample_id, "G") ~  "gut",
         str_detect(sample_id, "O") ~  "oral")) %>%
-  dplyr::filter(metric == "faith", sample_type == "gut") %>%
+  dplyr::filter(metric == "faith_pd", sample_type == "gut") %>%
     dplyr::filter(phase %in% c("bedrest", "recovery")) %>%
     assign_unique_time() %>%
   
@@ -529,7 +551,7 @@ figures$fig4$a <-
     colour = guide_legend(override.aes = list(
     shape = 15, size = 3, linewidth = 0, alpha = 1))) +
   annotate(
-      "text", label = "p (control) =  0.028; p (exercise) = 0.86", 
+      "text", label = "p (control) =  0.041; p (exercise) = 0.67", 
       x = -Inf, y = Inf, hjust = -0.08, vjust = 2, 
       size = 3, fontface = "bold")
 
@@ -541,7 +563,7 @@ figures$fig4$b <-
     sample_type = case_when(
         str_detect(sample_id, "G") ~  "gut",
         str_detect(sample_id, "O") ~  "oral")) %>%
-  filter(metric == "faith", sample_type == "oral") %>%
+  filter(metric == "faith_pd", sample_type == "oral") %>%
   filter(phase %in% c("bedrest", "recovery")) %>%
   assign_unique_time() %>%
   left_join(participants) %>%
@@ -571,7 +593,7 @@ figures$fig4$b <-
     colour = guide_legend(override.aes = list(
       shape = 15, size = 3, linewidth = 0, alpha = 1))) +
    annotate(
-      "text", label = "p (control) =  0.54; p (exercise) = 0.33", 
+      "text", label = "p (control) =  0.54; p (exercise) = 0.36", 
       x = -Inf, y = Inf, hjust = -0.08, vjust = 2, size = 3, fontface = "bold")
 
 figures$fig4$final <-
@@ -593,7 +615,8 @@ figures$fig4$final <-
     axis.title = element_text(size = 11),
     axis.text = element_text(size = 11),
     legend.justification = "center",
-    plot.tag = element_text(size = 14))
+    plot.tag = element_text(size = 14),
+    plot.margin = margin(0, 0, 0, 0))
 
 # Save figure
 ggsave( 
@@ -760,9 +783,10 @@ ggsave(
       strip.text = element_text(size = 8),
       legend.position = "bottom",
       legend.justification = "center",
-      axis.text.y = element_text(size = 8)),
+      axis.text.y = element_text(size = 8),
+      plot.margin = margin(0, 0, 0, 0)),
     
-    width = 6, height = 8.5, 
+    width = 6, height = 7.5, 
     units = "in", dpi = 600) 
 
 ggsave( 
@@ -780,8 +804,8 @@ ggsave(
            theme(
              axis.text.y = element_text(size = 7),
              plot.margin = margin(0, 0, 0, 0, "cm")),
-  width = 6.5, 
-  height = 7, 
+  width = 6, 
+  height = 8, 
   units = "in", 
   dpi = 600) 
 
@@ -799,7 +823,7 @@ ggsave(
            theme(
              axis.text.y = element_text(size = 7),
              plot.margin = margin(0, 0, 0, 0, "cm")),
-  width = 6.5, 
-  height = 7, 
+  width = 6, 
+  height = 7.5, 
   units = "in", 
   dpi = 600)

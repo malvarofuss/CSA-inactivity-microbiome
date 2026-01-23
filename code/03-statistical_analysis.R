@@ -1,9 +1,11 @@
-# Setup ----
+# 03 - Statistical analysis
 
-setwd("CSA")
+## Setup ----
+
+setwd(".")
 set.seed(0509)
 
-library(tidyverse)
+library(tidyverse) # Load libraries
 library(glue)
 library(rstatix) 
 library(vegan)
@@ -33,40 +35,53 @@ parse_sample_metadata <- function(data) {
         str_detect(sample_id, "M4") ~ NA) %>% as.numeric())
 }
 
-
-# Participant summary ----
+## Section 3.1 (Results) ----
 
 participants <- # Load participant metadata
   read_tsv("data/participant_metadata.tsv", col_types = c("ffffDnnnDn")) %>%
   mutate(cohort = str_replace(cohort, "Group", "Cohort"))
 
+frailty <- list(# Load frailty data
+  index = read_tsv("data/frailty_data.tsv", col_types = c("nfci")),
+  frailty_components =
+    read_csv("data/frailty_components.csv") %>%
+    mutate(.keep = "unused",
+           participant_id = `Participant`,
+           phase = case_when(
+             `Timeline` == "Baseline" ~ "baseline",
+             str_detect(`Timeline`, "HDT") ~ "bedrest",
+             str_detect(`Timeline`, "Recovery") ~ "recovery",
+             `Timeline` == "4 Weeks" ~ "4w",
+             `Timeline` == "4 Months" ~ "4m"),
+           day = case_when(
+             str_detect(`Timeline`, "HDT") ~ str_extract(`Timeline`, "\\d+$"),
+             str_detect(`Timeline`, "R") ~ str_extract(`Timeline`, "\\d+$")) %>%
+             as.numeric()) %>%
+    mutate(across(1:33, ~ case_when(. == 2 ~ 0, TRUE ~ .)))) %>%
+  reduce(full_join)
+
+### Participant and frailty summary ----
+
+participants %>% # Calculate mean age across all participants
+  summarise(mean_age = mean(age), sd_age = sd(age))
+
 participants %>% # Calculate participant BMI
   mutate(bmi = weight_kg / ((height_cm / 100)^2))
 
-participants %>% # Calculate mean age across all participants
-  summarise(
-    mean_age = mean(age),
-    sd_age = sd(age))
+participants %>% # Grouped summary for age, height, weight, and BMI
+  group_by(exercise, sex) %>% 
+  summarise( # Calculate mean and SD
+    mean(age), sd(age), mean(height_cm), sd(height_cm),
+    mean(weight_kg), sd(weight_kg), mean(bmi), sd(bmi))
 
-frailty <- # Load frailty data
-  read_tsv("data/frailty_data.tsv", col_types = c("nfci"))
+inner_join(participants, frailty) %>% # Participant frailty at baseline
+  filter(phase == "baseline") %>%
+  group_by(exercise, sex) %>%
+  summarise(mean(fi36), sd(fi36))
 
-participants %>% # Participant summary by sex and exercise group
-  inner_join( # Add baseline FI-36 measurements
-    frailty %>% filter(phase == "baseline")) %>%
-  group_by(exercise, sex) %>% # Group data
-  summarise( # Summarize age, height, weight and BMI (mean and SD)
-    age_mean = mean(age),
-    age_sd = sd(age), 
-    height_mean = mean(height_cm),
-    height_sd = sd(height_cm),
-    weight_mean = mean(weight_kg),
-    weight_sd = sd(weight_kg),
-    bmi_mean = mean(bmi),
-    bmi_sd = sd(bmi),
-    fi_mean = mean(fi36),
-    fi_sd = sd(fi36)) %>%
-  write_tsv("results/participant_summary.tsv")
+inner_join(participants, frailty) %>% # Change in frailty during bedrest
+  filter(phase == "bedrest", day == 14) %>%  
+  summarise(median(fi36))
 
 participants %>% # Kruskal-Wallis test for BMI
     mutate(group = interaction(exercise, sex)) %>%
@@ -76,13 +91,45 @@ participants %>% # Calculate effect size for BMI KW test
     mutate(group = interaction(exercise, sex)) %>%
     kruskal_effsize(bmi ~ group)
 
-participants %>% # Kruskal-Wallis test for baseline FI-36
+participants %>% # Kruskal-Wallis test for baseline frailty
     inner_join(frailty %>% filter(phase == "baseline")) %>%
     mutate(group = interaction(exercise, sex)) %>%
     kruskal_test(fi36 ~ group)
 
+### Sample missingness ----
 
-# Family relative abundance ----
+samples <- list( # Load sample metadata
+  gut = read_csv("data/16S/sample_depth_gut.csv"),
+  oral = read_csv("data/16S/sample_depth_oral.csv")) 
+
+samples$missingness_bedrest <- samples %>% # Calculate missingess 
+  map(~ .x %>% 
+    filter(str_detect(sample_id, "HDT")) %>%
+    parse_sample_metadata() %>%
+    complete(day, participant_id, sample_type) %>%
+    mutate(present = as.integer(!is.na(`seq_depth`)))) %>%
+  reduce(rbind)
+
+samples$missingness_bedrest %>% # Missingness distribution by participant
+  group_by(participant_id, sample_type) %>%
+  summarise(perc_missing = mean(present == 0)) %>%
+  group_by(sample_type) %>%
+  summarise(
+    median_missing = median(perc_missing) * 100,
+    IQR_missing = IQR(perc_missing) * 100,
+    min_missing = min(perc_missing) * 100,
+    max_missing = max(perc_missing) * 100)
+
+map(c("day", "sex", "exercise"), function(var) { # Differences in missingness
+  samples$missingness_bedrest %>%
+    inner_join(participants, by = "participant_id") %>%
+    glmer(
+      formula = as.formula(glue("present ~ {var} + (1 | participant_id)")),
+      data = ., family = binomial) %>%
+    summary()
+})
+
+### Family relative abundance ----
 
 feature_tables <- list() # More feature tables will be added for DA analysis
 
@@ -114,166 +161,107 @@ feature_tables$family_relab %>%
   write_tsv("results/top_6_families.tsv")
 
 
-# Beta diversity analysis ----
+## Section 3.2. Beta diversity analysis ----
 
-# Load beta diversity results
-beta_diversity <- list( 
-  dm_gut = # Gut distance matrix
-    read_tsv("data/16S/diversity/dm_gut.tsv") %>%
-      rename("sample_id" = 1),
-  dm_oral = # Oral distance matrix
-    read_tsv("data/16S/diversity/dm_oral.tsv") %>%
-      rename("sample_id" = 1),
-  pcoa_gut = # Gut ordination plot
-    read_tsv(
-      "data/16S/diversity/ordination_gut.txt",
-      skip = 7, col_names = c("sample_id", "PC1", "PC2")) %>%
-      filter(str_detect(sample_id, "PT")) %>%
-      mutate(across(2:3, as.numeric)), 
-  pcoa_oral = # Oral ordination plot
-    read_tsv(
-      "data/16S/diversity/ordination_oral.txt",
-      skip = 7, , col_names = c("sample_id", "PC1", "PC2"))  %>%
-      filter(str_detect(sample_id, "PT")) %>%
-      mutate(across(2:3, as.numeric))) %>%
-  map(parse_sample_metadata) %>% # Parse sample ID for all results
-  map(~ left_join(.x, participants)) # Join participant metadata
+beta_diversity <- list()
 
-# Format beta-diversity matrices as distances for PERMANOVA 
-beta_diversity$dist_gut <- # Gut samples
-  beta_diversity$dm_gut %>% 
-  select(all_of(.[["sample_id"]])) %>% 
-  as.dist()
-beta_diversity$dist_oral <- # Oral samples
-  beta_diversity$dm_oral %>% 
-  select(all_of(.[["sample_id"]])) %>% 
-  as.dist()
+beta_diversity$matrices <- # Load distance matrices
+  list.files(
+    "data/16S/diversity", pattern = "dm.*\\.tsv$", full.names = TRUE) %>%
+  set_names(basename(.) %>% 
+    str_remove("\\.tsv$") %>% str_remove("_dm")) %>%
+  map(~ .x %>% read_tsv %>% rename("sample_id" = 1))
 
 # Calculate association with participant ID, sex, cohort and exercise group
-calculate_permanova <- function(sample_type, study_variable) {
-  set.seed(0509)
-  dist_mat <- beta_diversity[[paste0("dist_", sample_type)]]
-  dm_mat   <- beta_diversity[[paste0("dm_", sample_type)]] 
-  
-  formula <- as.formula(paste("dist_mat ~", study_variable))
-  
-  adonis2(formula, data = dm_mat, method = "robust.aitchison") %>%
-    rownames_to_column(var = "rowname") %>%
-    write_tsv(
-      glue("results/permanovas/{sample_type}_{study_variable}.tsv"))
-}
-
-expand_grid( # Run all PERMANOVA tests
-  c("gut", "oral"), 
+expand_grid( 
+  names(beta_diversity$matrices), 
   c("participant_id", "cohort", "sex", "exercise")) %>%
-pmap(~ calculate_permanova(..1, ..2))
+  pmap(~ {
+    matrix <- ..1
+    variable <- ..2
+    
+    data <- beta_diversity$matrices[[matrix]] %>% # Append metadata
+      parse_sample_metadata() %>% inner_join(participants)
+    
+    samples <- data$sample_id # Extract sample IDs
+    
+    dist_mat <- data %>% # Format matrix as distances
+      select(all_of(samples)) %>%
+      as.dist()
+    
+    vars <- data %>% select(variable, participant_id)
+    
+    formula <- as.formula(paste("dist_mat ~", variable))
+    
+    set.seed(509)
+    adonis2(formula, data = vars, by = "margin") %>%
+      slice(1) %>%
+      mutate(matrix = {{matrix}}, variable = {{variable}})
+      
+  }) %>% reduce(rbind) %>%
+  write_tsv("results/permanovas_study_variables.tsv")
 
-# Association with FI-36 (uncorrected model)
-beta_diversity$dist_gut_frailty <- # Format distances (gut)
-  beta_diversity$dm_gut %>%
-  right_join(frailty) %>%
-  filter(!is.na(`fi36`), !is.na(sample_id)) %>%
-  select(all_of(.[["sample_id"]])) %>%
-  as.dist()
-beta_diversity$dist_oral_frailty <- # Format distances (oral)
-  beta_diversity$dm_oral %>%
-  right_join(frailty) %>%
-  filter(!is.na(`fi36`), !is.na(sample_id)) %>%
-  select(all_of(.[["sample_id"]])) %>%
-  as.dist()
-set.seed(0509)
-adonis2( # Calculate PERMANOVA (gut)
-  beta_diversity$dist_gut_frailty ~ fi36, 
-  by = "margin",
-  method = "robust.aitchison",
-  data = beta_diversity$dm_gut %>% 
-    right_join(frailty) %>%
-    filter(!is.na(`fi36`), !is.na(`sample_id`)) %>%
-    select(all_of(.[["sample_id"]]), fi36)) %>%
-  rownames_to_column(var = "rowname") %>%
-  write_tsv("results/permanovas/gut_frailty_uncorrected.tsv")
-set.seed(0509)
-adonis2( # Calculate PERMANOVA (oral)
-  beta_diversity$dist_oral_frailty ~ fi36, 
-  by = "margin",
-  method = "robust.aitchison",
-  data = beta_diversity$dm_oral %>% 
-    right_join(frailty) %>%
-    filter(!is.na(`fi36`), !is.na(`sample_id`)) %>%
-    select(all_of(.[["sample_id"]]), fi36)) %>%
-  rownames_to_column(var = "rowname") %>%
-  write_tsv("results/permanovas/oral_frailty_uncorrected.tsv")
+# Calculate association with FI-36
+map(beta_diversity$matrices, ~ {
 
-# Association with FI-36 (model adjusted for participant ID)
-set.seed(0509)
-adonis2( # Calculate PERMANOVA (gut)
-  beta_diversity$dist_gut_frailty ~ fi36 + participant_id, 
-  by = "margin",
-  method = "robust.aitchison",
-  data = beta_diversity$dm_gut %>% 
-    right_join(frailty) %>%
-    filter(!is.na(`fi36`), !is.na(`sample_id`)) %>%
-    select(all_of(.[["sample_id"]]), fi36, participant_id)) %>%
-  rownames_to_column(var = "rowname") %>%
-  write_tsv("results/permanovas/gut_frailty_corrected.tsv")
-set.seed(0509)
-adonis2( # Calculate PERMANOVA (oral)
-  beta_diversity$dist_oral_frailty ~ fi36 + participant_id, 
-  by = "margin",
-  method = "robust.aitchison",
-  data = beta_diversity$dm_oral %>% 
-    right_join(frailty) %>%
-    filter(!is.na(`fi36`), !is.na(`sample_id`)) %>%
-    select(all_of(.[["sample_id"]]), fi36, , participant_id)) %>%
-  rownames_to_column(var = "rowname") %>%
-  write_tsv("results/permanovas/oral_frailty_corrected.tsv")
+  data <- .x %>%
+    parse_sample_metadata() %>%
+    inner_join(frailty %>% filter(!is.na(fi36)))
+    # filter(fi36 < 0.6) # Uncomment to remove frailty outlier for analysis
 
-# Association with FI-36 (outlier removed, model adjusted for participant ID)
-beta_diversity$dist_gut_frailty_noout <- 
-  beta_diversity$dm_gut %>% 
-  right_join(frailty) %>%
-  filter(!is.na(`fi36`), !is.na(sample_id)) %>%
-  filter(!is.na(sample_id)) %>%
-  filter(fi36 < 0.6) %>% # Remove high-frailty outlier
-  select(all_of(.[["sample_id"]])) %>% 
-  as.dist()
-beta_diversity$dist_oral_frailty_noout <- 
-  beta_diversity$dm_oral %>% 
-  right_join(frailty) %>%
-  filter(!is.na(`fi36`), !is.na(sample_id)) %>% 
-  filter(fi36 < 0.6) %>% # Remove high-frailty outlier
-  select(all_of(.[["sample_id"]])) %>% 
-  as.dist()
-set.seed(0509)
-adonis2( # Gut samples
-  beta_diversity$dist_gut_frailty_noout ~ fi36 + participant_id, 
-  by = "margin",
-  method = "robust.aitchison",
-  data = beta_diversity$dm_gut %>% 
-    right_join(frailty) %>%
-    filter(!is.na(`fi36`), !is.na(sample_id)) %>% 
-    filter(fi36 < 0.6) %>% # Remove high-frailty outlier
-    select(all_of(.[["sample_id"]]), fi36, participant_id)) %>%
-  rownames_to_column(var = "rowname") %>%
-  write_tsv("results/permanovas/gut_frailty_corrected_noout.tsv")
-set.seed(0509)
-adonis2( # Gut samples
-  beta_diversity$dist_oral_frailty_noout ~ fi36 + participant_id, 
-  by = "margin",
-  method = "robust.aitchison",
-  data = beta_diversity$dm_oral %>% 
-    right_join(frailty) %>%
-    filter(!is.na(`fi36`), !is.na(sample_id)) %>% 
-    filter(fi36 < 0.6) %>% # Remove high-frailty outlier
-    select(all_of(.[["sample_id"]]), fi36, , participant_id)) %>%
-  rownames_to_column(var = "rowname") %>%
-  write_tsv("results/permanovas/oral_frailty_corrected_noout.tsv")
+  samples <- data$sample_id
+  
+  dist_mat <- data %>%
+    select(all_of(samples)) %>%
+    as.dist()
+    
+  vars <- data %>% select(fi36, participant_id)
+  
+  set.seed(0509)
+  adonis2(
+    dist_mat ~ fi36 + participant_id, 
+    data = vars, by = "margin")
+})
+  
+# Frailty component analysis
+expand_grid( 
+  names(beta_diversity$matrices), 
+  colnames(frailty %>% select(contains("Bother_")))) %>%
+  pmap(~ {
+    matrix <- ..1
+    component <- ..2
+    
+    data = beta_diversity$matrices[[matrix]] %>%
+      parse_sample_metadata() %>%
+      inner_join(frailty %>% filter(!is.na(!!sym(component))))
+    
+    dist_mat <- data %>%
+      select(all_of(.$sample_id)) %>%
+      as.dist()
+    
+    vars <- data %>% select(all_of(component)) 
+    
+    n_component <- sum(vars[[component]])
+    
+    formula <- as.formula(paste("dist_mat ~ ", component))
+    set.seed(0509)
+    
+    adonis2(formula, data = vars) %>%
+      slice(1) %>% 
+      mutate(
+        matrix = {{matrix}},
+        component = str_remove(component, "Bother_"),
+        n = n_component)
+  }) %>% reduce(rbind) %>%
+  group_by(matrix) %>%
+  adjust_pvalue(p.col = "Pr(>F)", output.col = "p_BH", method = "BH") %>%
+  write_tsv("results/permanovas_frailty_components.tsv")
 
 # Alpha diversity analysis ----
 
 # Load alpha diversity data
 alpha_diversity <- 
-  c("observed_features", "shannon", "faith") %>% # Load all metrics 
+  c("observed_features", "shannon", "faith_pd") %>% # Load all metrics 
   map_dfr(~ read_table(
     glue("data/16S/diversity/{.x}.tsv"),
     skip = 1, 

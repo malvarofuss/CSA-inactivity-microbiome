@@ -1,9 +1,4 @@
-This repository contains files relevant to the following paper: [*Effect of bedrest on 
-the human gut and oral microbiome: implications for frailty*]() [🔗]()
+This repository contains code and results from the paper: [*Effect of bedrest on the human gut and oral microbiome: implications for frailty*](https://www.sciencedirect.com/science/article/pii/S0531556526000574?via%3Dihub)
 
- - Code used for bioinformatic and statistical analyses can be found in `code`.
- - Analysis results, including `.qzv` files, figures, and statistical outputs,
-can be found in `results`.
- - The `data` directory may be made available by the corresponding author upon
-reasonable request.
+Data may be made available by the corresponding author upon reasonable request, as they may only be shared for the use under which they were ethically approved. 
 

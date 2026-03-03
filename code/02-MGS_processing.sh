@@ -2,7 +2,7 @@
 
 # Setup ----
 
-cd ~/CSA/MGS
+cd ~/CSA-inactivity-microbiome/MGS
 conda activate /home/robyn/anaconda3/envs/biobakery3
 
 

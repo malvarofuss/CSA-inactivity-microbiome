@@ -2,11 +2,11 @@
 
 # Setup and activate QIIME2 environment ----
 
-cd ~/CAIS-microbiome/data/16S
+cd ~/CSA-inactivity-microbiome/data/16S
 conda activate qiime2-2022.8 # Version 2022.8
 
 # .qzv files were generated for all .qza files
-mkdir ~/CAIS-microbiome/results/qzv_files/ 
+mkdir ~/CSA-inactvity-microbiome/results/qzv_files/ 
 
 
 # Import raw reads into QIIME2 ----
